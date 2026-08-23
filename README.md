@@ -76,27 +76,32 @@ The container runs gunicorn on port 5555.
 
 ## Podman Quadlet (systemd-managed container)
 
-Quadlet units live in `quadlet/`. To install:
+Quadlet units live in `quadlet/`. The `.container` file generates
+`voaremolelas.service`, and the `.network` file generates
+`voaremolelas-network.service`. To install:
 
 ```bash
 podman build -t voaremolelas:latest .
 cp quadlet/voaremolelas.network quadlet/voaremolelas.container \
    ~/.config/containers/systemd/
 systemctl --user daemon-reload
-systemctl --user enable --now voaremolelas.container
+systemctl --user start voaremolelas.service
 ```
+
+The generated units are wired into the user session automatically after
+`daemon-reload`; do not try to enable `voaremolelas.container` directly.
 
 Check status and logs:
 
 ```bash
-systemctl --user status voaremolelas.container
-journalctl --user -u voaremolelas.container -f
+systemctl --user status voaremolelas.service
+journalctl --user -u voaremolelas.service -f
 ```
 
 Stop/remove:
 
 ```bash
-systemctl --user disable --now voaremolelas.container
+systemctl --user stop voaremolelas.service
 rm ~/.config/containers/systemd/voaremolelas.{container,network}
 systemctl --user daemon-reload
 ```
