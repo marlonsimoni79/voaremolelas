@@ -1,0 +1,8 @@
+.git
+__pycache__
+*.pyc
+tests
+README.md
+prompt.md
+AGENTS.md
+quadlet

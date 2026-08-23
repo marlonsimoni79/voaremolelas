@@ -1,0 +1,18 @@
+[Unit]
+Description=Voaremolelas - paragliding weather analyzer (Almargem)
+Requires=voaremolelas.network
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+ContainerName=voaremolelas
+ContainerImage=docker.io/library/voaremolelas:latest
+PublishPort=127.0.0.1:5555:5555
+Network=voaremolelas
+Restart=always
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target
