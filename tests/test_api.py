@@ -86,7 +86,7 @@ class TestIndex:
     def test_index_renders(self, client):
         resp = client.get("/")
         assert resp.status_code == 200
-        assert b"Voar Molelas" in resp.data
+        assert b"Voar em Olelas" in resp.data
 
 
 class TestWeather:
