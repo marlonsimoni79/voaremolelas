@@ -2,7 +2,7 @@
 
 Criteria (from the spec):
   * wind speed between 15 and 22 km/h
-  * wind direction between W (270 deg) and NW (315 deg)
+  * wind direction between W (270 deg, exclusive) and NW (337.5 deg, inclusive)
   * no rain (not raining now and low rain probability)
 """
 
@@ -102,7 +102,7 @@ def assess_wind_direction(wind_direction_deg: Optional[float]) -> Criterion:
     label = "Wind direction (W to NW)"
     if wind_direction_deg is None:
         return Criterion("wind_direction", label, False, "no wind direction data")
-    ok = config.wind_dir_min <= wind_direction_deg <= config.wind_dir_max
+    ok = config.wind_dir_min < wind_direction_deg <= config.wind_dir_max
     detail = f"{wind_direction_deg:.0f} deg ({direction_to_compass(wind_direction_deg)})"
     return Criterion("wind_direction", label, ok, detail)
 

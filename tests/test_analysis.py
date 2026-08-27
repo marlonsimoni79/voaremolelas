@@ -77,14 +77,21 @@ class TestWindSpeed:
 
 class TestWindDirection:
     def test_w_to_nw(self):
-        assert assess_wind_direction(270).ok is True
-        assert assess_wind_direction(315).ok is True
+        assert assess_wind_direction(271).ok is True
         assert assess_wind_direction(290).ok is True
+        assert assess_wind_direction(315).ok is True
+
+    def test_w_exclusive(self):
+        assert assess_wind_direction(270).ok is False
+
+    def test_nw_inclusive(self):
+        assert assess_wind_direction(337.5).ok is True
 
     def test_outside(self):
         assert assess_wind_direction(269).ok is False
-        assert assess_wind_direction(316).ok is False
+        assert assess_wind_direction(338).ok is False
         assert assess_wind_direction(90).ok is False
+        assert assess_wind_direction(0).ok is False
 
     def test_missing(self):
         assert assess_wind_direction(None).ok is False

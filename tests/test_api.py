@@ -60,6 +60,20 @@ def make_series():
     )
 
 
+class _FakeClient:
+    """Client stand-in exposing only the methods the routes call."""
+
+    def __init__(self, current=None, series=None):
+        self._current = current
+        self._series = series
+
+    def get_current(self):
+        return self._current
+
+    def get_series(self, hours=6):
+        return self._series
+
+
 def make_tephigrams():
     return [
         Tephigram(
@@ -155,6 +169,41 @@ class TestWeather:
         assert data["assessment"]["verdict"] == "BAD"
         assert data["current"] is None
         assert len(data["assessment"]["criteria"]) == 3
+
+    def test_current_from_allmetsat(self, client, monkeypatch):
+        allmetsat = make_current(wind_avg=24.1, wind_dir=280)
+        monkeypatch.setattr(routes, "AllmetsatClient", lambda: _FakeClient(allmetsat))
+        monkeypatch.setattr(routes, "_fetch_series", lambda: make_series())
+        monkeypatch.setattr(routes, "_fetch_rain_now", lambda: make_rain())
+        data = client.get("/api/weather").get_json()
+        assert data["current"]["wind_avg_kmh"] == 24.1
+        assert data["current"]["wind_direction_deg"] == 280
+
+    def test_falls_back_to_windguru_when_allmetsat_fails(self, client, monkeypatch):
+        def boom_allmetsat():
+            raise RuntimeError("allmetsat down")
+
+        windguru = make_current(wind_avg=18.0, wind_dir=290)
+        monkeypatch.setattr(routes, "AllmetsatClient", boom_allmetsat)
+        monkeypatch.setattr(routes, "WindguruClient", lambda: _FakeClient(windguru))
+        monkeypatch.setattr(routes, "_fetch_series", lambda: make_series())
+        monkeypatch.setattr(routes, "_fetch_rain_now", lambda: make_rain())
+        data = client.get("/api/weather").get_json()
+        assert data["current"]["wind_avg_kmh"] == 18.0
+        assert data["current"]["wind_direction_deg"] == 290
+        assert data["assessment"]["errors"] == []
+
+    def test_current_none_when_both_sources_fail(self, client, monkeypatch):
+        def boom():
+            raise RuntimeError("down")
+
+        monkeypatch.setattr(routes, "AllmetsatClient", boom)
+        monkeypatch.setattr(routes, "WindguruClient", boom)
+        monkeypatch.setattr(routes, "_fetch_series", lambda: make_series())
+        monkeypatch.setattr(routes, "_fetch_rain_now", lambda: make_rain())
+        data = client.get("/api/weather").get_json()
+        assert data["current"] is None
+        assert any("current" in e for e in data["assessment"]["errors"])
 
     def test_rain_forecast_serialized(self, client, monkeypatch):
         forecast = RainForecast(

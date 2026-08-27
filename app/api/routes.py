@@ -10,6 +10,7 @@ from typing import Any, Callable, Dict, Optional, Tuple
 from flask import Blueprint, jsonify, render_template
 
 from app.config import config
+from app.data.allmetsat import AllmetsatClient
 from app.data.ipma import IpmmaClient
 from app.data.openmeteo import OpenMeteoClient
 from app.data.windguru import WindguruClient
@@ -44,7 +45,11 @@ def clear_cache() -> None:
 # Data access functions (module-level so tests can monkeypatch them).
 
 def _fetch_current():
-    return WindguruClient().get_current()
+    try:
+        return AllmetsatClient().get_current()
+    except Exception as exc:
+        logger.warning("Allmetsat fetch failed (%s); falling back to Windguru", exc)
+        return WindguruClient().get_current()
 
 
 def _fetch_series():

@@ -25,11 +25,15 @@ class Config:
     # Open-Meteo rain data
     openmeteo_url: str = "https://api.open-meteo.com/v1/forecast"
 
+    # Allmetsat METAR/TAF page (LPST = Sintra-Cascais, nearest METAR to Almargem)
+    allmetsat_url: str = "https://pt.allmetsat.com/metar-taf/portugal-espanha.php?icao={icao}"
+    allmetsat_icao: str = "LPST"
+
     # Flying criteria
     wind_min_kmh: float = 15.0
     wind_max_kmh: float = 22.0
-    wind_dir_min: int = 270  # W
-    wind_dir_max: int = 315  # NW
+    wind_dir_min: float = 270.0  # W (exclusive)
+    wind_dir_max: float = 337.5  # NW (inclusive)
     rain_probability_threshold: int = 40  # percent
 
     # Runtime
