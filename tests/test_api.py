@@ -271,3 +271,52 @@ class TestWeather:
         data = client.get("/api/weather").get_json()
         assert data["rain_forecast"]["hours"] == ["10:00", "11:00"]
         assert data["rain_forecast"]["rain_mm"] == [0.0, 0.2]
+
+
+class TestStationSelection:
+    def test_valid_station_uses_station_current(self, client, monkeypatch):
+        station_current = make_current(wind_avg=12.0, wind_dir=250)
+        captured = {}
+
+        def fake_fetch(station_id):
+            captured["station_id"] = station_id
+            return station_current
+
+        monkeypatch.setattr(routes, "_fetch_station_current", fake_fetch)
+        monkeypatch.setattr(routes, "_fetch_series", lambda: make_series())
+        monkeypatch.setattr(routes, "_fetch_rain_now", lambda: make_rain())
+        data = client.get("/api/weather?station=IPEROP1").get_json()
+        assert data["current"]["wind_avg_kmh"] == 12.0
+        assert data["current"]["wind_direction_deg"] == 250
+        assert captured["station_id"] == "IPEROP1"
+
+    def test_invalid_station_falls_back_to_default(self, client, monkeypatch):
+        default_current = make_current(wind_avg=24.1, wind_dir=280)
+        monkeypatch.setattr(routes, "_fetch_current", lambda: default_current)
+        monkeypatch.setattr(routes, "_fetch_series", lambda: make_series())
+        monkeypatch.setattr(routes, "_fetch_rain_now", lambda: make_rain())
+        data = client.get("/api/weather?station=NOTASTATION").get_json()
+        assert data["current"]["wind_avg_kmh"] == 24.1
+        assert data["current"]["wind_direction_deg"] == 280
+
+    def test_missing_station_uses_default(self, client, monkeypatch):
+        default_current = make_current(wind_avg=24.1, wind_dir=280)
+        monkeypatch.setattr(routes, "_fetch_current", lambda: default_current)
+        monkeypatch.setattr(routes, "_fetch_series", lambda: make_series())
+        monkeypatch.setattr(routes, "_fetch_rain_now", lambda: make_rain())
+        data = client.get("/api/weather").get_json()
+        assert data["current"]["wind_avg_kmh"] == 24.1
+
+    def test_valid_station_failure_returns_none_without_fallback(self, client, monkeypatch):
+        def boom_station():
+            raise RuntimeError("pws down")
+
+        # Even though the default METAR source is healthy, an explicit
+        # station failure must not fall back to it.
+        monkeypatch.setattr(routes, "_fetch_station_current", boom_station)
+        monkeypatch.setattr(routes, "_fetch_current", lambda: make_current())
+        monkeypatch.setattr(routes, "_fetch_series", lambda: make_series())
+        monkeypatch.setattr(routes, "_fetch_rain_now", lambda: make_rain())
+        data = client.get("/api/weather?station=IALMAR8").get_json()
+        assert data["current"] is None
+        assert any("current:IALMAR8" in e for e in data["assessment"]["errors"])

@@ -8,7 +8,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Optional, Tuple
 
-from flask import Blueprint, jsonify, render_template
+from flask import Blueprint, jsonify, render_template, request
 
 from app.config import config
 from app.data.allmetsat import AllmetsatClient
@@ -44,6 +44,17 @@ def clear_cache() -> None:
         _cache.clear()
 
 
+def _valid_station_id() -> Optional[str]:
+    """Return the requested PWS station id if it is a configured one, else None."""
+    station = request.args.get("station")
+    if not station:
+        return None
+    for station_id, _label in config.wunderground_stations:
+        if station_id == station:
+            return station
+    return None
+
+
 # Data access functions (module-level so tests can monkeypatch them).
 
 def _is_stale(current: CurrentConditions) -> bool:
@@ -64,6 +75,11 @@ def _fetch_current():
         logger.info("Allmetsat METAR is stale; falling back to Wunderground PWS")
         return WundergroundClient().get_current()
     return current
+
+
+def _fetch_station_current(station_id: str):
+    """Fetch current conditions directly from the selected PWS (no METAR fallback)."""
+    return WundergroundClient(station_id=station_id).get_current()
 
 
 def _fetch_series():
@@ -141,7 +157,7 @@ def _tephigrams_json(tephigrams) -> Optional[list]:
 
 @api.route("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", stations=config.wunderground_stations)
 
 
 @api.route("/api/weather")
@@ -157,7 +173,11 @@ def weather():
             errors.append(f"{key}: {exc}")
             return None
 
-    current = guarded("current", _fetch_current)
+    station = _valid_station_id()
+    if station:
+        current = guarded(f"current:{station}", lambda: _fetch_station_current(station))
+    else:
+        current = guarded("current", _fetch_current)
     series = guarded("series", _fetch_series)
     rain_now = guarded("rain_now", _fetch_rain_now)
     rain_forecast = guarded("rain_forecast", _fetch_rain_forecast)
