@@ -1,6 +1,6 @@
 """API tests: all external data sources are mocked."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -22,6 +22,7 @@ def client():
 
 
 def make_current(wind_avg=18.0, wind_dir=290):
+    """Return a current-conditions object with a fresh (now) timestamp."""
     return CurrentConditions(
         wind_avg_kmh=wind_avg,
         wind_max_kmh=20.0,
@@ -29,7 +30,20 @@ def make_current(wind_avg=18.0, wind_dir=290):
         temperature_c=20.0,
         relative_humidity_pct=50,
         mslp_hpa=1015.0,
-        observed_at=datetime(2026, 8, 23, 10, 0, tzinfo=timezone.utc),
+        observed_at=datetime.now(timezone.utc),
+    )
+
+
+def make_stale_current(wind_avg=18.0, wind_dir=290):
+    """Return a current-conditions object whose METAR is older than the max age."""
+    return CurrentConditions(
+        wind_avg_kmh=wind_avg,
+        wind_max_kmh=20.0,
+        wind_direction_deg=wind_dir,
+        temperature_c=20.0,
+        relative_humidity_pct=50,
+        mslp_hpa=1015.0,
+        observed_at=datetime.now(timezone.utc) - timedelta(hours=2),
     )
 
 
@@ -180,6 +194,36 @@ class TestWeather:
     def test_current_from_allmetsat(self, client, monkeypatch):
         allmetsat = make_current(wind_avg=24.1, wind_dir=280)
         monkeypatch.setattr(routes, "AllmetsatClient", lambda: _FakeClient(allmetsat))
+        monkeypatch.setattr(routes, "_fetch_series", lambda: make_series())
+        monkeypatch.setattr(routes, "_fetch_rain_now", lambda: make_rain())
+        data = client.get("/api/weather").get_json()
+        assert data["current"]["wind_avg_kmh"] == 24.1
+        assert data["current"]["wind_direction_deg"] == 280
+
+    def test_is_stale(self):
+        assert routes._is_stale(make_stale_current()) is True
+        assert routes._is_stale(make_current()) is False
+        assert routes._is_stale(None) is False
+
+    def test_falls_back_to_wunderground_when_metar_stale(self, client, monkeypatch):
+        # Allmetsat returns a stale METAR; Wunderground is the fresh fallback.
+        monkeypatch.setattr(routes, "AllmetsatClient",
+                             lambda: _FakeClient(make_stale_current(wind_avg=24.1, wind_dir=280)))
+        wunderground = make_current(wind_avg=19.5, wind_dir=270)
+        monkeypatch.setattr(routes, "WundergroundClient", lambda: _FakeClient(wunderground))
+        monkeypatch.setattr(routes, "_fetch_series", lambda: make_series())
+        monkeypatch.setattr(routes, "_fetch_rain_now", lambda: make_rain())
+        data = client.get("/api/weather").get_json()
+        assert data["current"]["wind_avg_kmh"] == 19.5
+        assert data["current"]["wind_direction_deg"] == 270
+        assert data["assessment"]["errors"] == []
+
+    def test_fresh_metar_stays_with_allmetsat(self, client, monkeypatch):
+        # A fresh METAR must NOT trigger the Wunderground fallback.
+        monkeypatch.setattr(routes, "AllmetsatClient",
+                             lambda: _FakeClient(make_current(wind_avg=24.1, wind_dir=280)))
+        monkeypatch.setattr(routes, "WundergroundClient",
+                             lambda: _FakeClient(make_current(wind_avg=10.0)))
         monkeypatch.setattr(routes, "_fetch_series", lambda: make_series())
         monkeypatch.setattr(routes, "_fetch_rain_now", lambda: make_rain())
         data = client.get("/api/weather").get_json()

@@ -28,6 +28,15 @@ class Config:
     # Allmetsat METAR/TAF page (LPST = Sintra-Cascais, nearest METAR to Almargem)
     allmetsat_url: str = "https://pt.allmetsat.com/metar-taf/portugal-espanha.php?icao={icao}"
     allmetsat_icao: str = "LPST"
+    # Maximum age (seconds) before a METAR is considered stale and the
+    # Wunderground PWS fallback is used.
+    metar_max_age_seconds: int = 3600
+
+    # Wunderground PWS fallback (fresh local observation for Almargem)
+    wunderground_api: str = "https://api.weather.com"
+    wunderground_api_key: str = "53b89abc03d14d7ab89abc03d1dd7ab6"
+    wunderground_station_id: str = "IPEROP1"
+    wunderground_page: str = "https://www.wunderground.com/dashboard/pws/IPEROP1?cm_ven=localwx_pwsdash"
 
     # Flying criteria
     wind_min_kmh: float = 15.0

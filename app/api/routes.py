@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Optional, Tuple
 
 from flask import Blueprint, jsonify, render_template
@@ -13,7 +14,8 @@ from app.config import config
 from app.data.allmetsat import AllmetsatClient
 from app.data.ipma import IpmmaClient
 from app.data.openmeteo import OpenMeteoClient
-from app.data.windguru import WindguruClient
+from app.data.windguru import CurrentConditions, WindguruClient
+from app.data.wunderground import WundergroundClient
 from app.logic.analysis import analyze
 
 logger = logging.getLogger(__name__)
@@ -44,12 +46,24 @@ def clear_cache() -> None:
 
 # Data access functions (module-level so tests can monkeypatch them).
 
+def _is_stale(current: CurrentConditions) -> bool:
+    """True when the observation's timestamp is older than the max age."""
+    if current is None or current.observed_at is None:
+        return False
+    age = (datetime.now(timezone.utc) - current.observed_at).total_seconds()
+    return age > config.metar_max_age_seconds
+
+
 def _fetch_current():
     try:
-        return AllmetsatClient().get_current()
+        current = AllmetsatClient().get_current()
     except Exception as exc:
         logger.warning("Allmetsat fetch failed (%s); falling back to Windguru", exc)
         return WindguruClient().get_current()
+    if _is_stale(current):
+        logger.info("Allmetsat METAR is stale; falling back to Wunderground PWS")
+        return WundergroundClient().get_current()
+    return current
 
 
 def _fetch_series():
