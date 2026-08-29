@@ -95,6 +95,7 @@ def _current_json(current) -> Optional[Dict[str, Any]]:
         "relative_humidity_pct": current.relative_humidity_pct,
         "mslp_hpa": current.mslp_hpa,
         "observed_at": current.observed_at.isoformat() if current.observed_at else None,
+        "source": current.source,
     }
 
 

@@ -128,6 +128,7 @@ def parse_metar(metar: str, now: Optional[datetime] = None) -> CurrentConditions
         relative_humidity_pct=humidity,
         mslp_hpa=mslp_hpa,
         observed_at=_observed_at(metar, now),
+        source="metar",
     )
 
 

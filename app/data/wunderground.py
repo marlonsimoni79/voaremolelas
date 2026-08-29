@@ -125,6 +125,7 @@ class WundergroundClient:
             relative_humidity_pct=_to_float(obs.get("humidityAvg")),
             mslp_hpa=_to_float(metric.get("pressureMax")),
             observed_at=_observed_at(obs),
+            source="wunderground",
         )
 
 
