@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Dict, List, Optional
+from zoneinfo import ZoneInfo
 
 import requests
 
@@ -81,34 +82,71 @@ class OpenMeteoClient:
         except ValueError as exc:
             raise OpenMeteoError(f"Open-Meteo returned non-JSON: {exc}") from exc
         if "error" in payload:
-            raise OpenMeteoError(f"Open-Meteo error: {payload.get('error')}")
+            reason = payload.get("reason") or payload.get("error")
+            raise OpenMeteoError(f"Open-Meteo error: {reason}")
         return payload
 
     def get_rain_now(self) -> RainNow:
-        """Fetch the current rain amount and precipitation probability."""
+        """Fetch the current rain amount and precipitation probability.
+
+        Open-Meteo does not expose a reliable ``precipitation_probability`` in
+        ``current`` mode (it is usually ignored and comes back as 0), so we
+        request the hourly forecast as well and read the probability for the
+        hour that contains the current time.
+        """
         payload = self._get(
             {
                 "latitude": self.lat,
                 "longitude": self.lon,
-                "current": "rain,precipitation_probability",
+                "current": "rain",
+                "hourly": "precipitation_probability",
+                "forecast_days": 1,
                 "timezone": config.timezone,
             }
         )
         current = payload.get("current", {})
         rain = _to_float(current.get("rain"))
-        probability = _to_int(current.get("precipitation_probability"))
         updated = None
         if current.get("time"):
             try:
-                updated = datetime.fromisoformat(current["time"]).replace(tzinfo=timezone.utc)
+                # Open-Meteo returns local (Europe/Lisbon) time when a
+                # timezone is requested, so attach that zone, not UTC.
+                updated = datetime.fromisoformat(current["time"]).replace(
+                    tzinfo=ZoneInfo(config.timezone)
+                )
             except ValueError:
                 updated = None
+        probability = self._probability_for_hour(payload, updated)
         return RainNow(
             rain_mm=rain,
             precipitation_probability_pct=probability,
             is_raining=(rain or 0) > 0,
             updated_at=updated,
         )
+
+    @staticmethod
+    def _probability_for_hour(
+        payload: Dict[str, Any], updated: Optional[datetime]
+    ) -> Optional[int]:
+        """Return the hourly precipitation probability for the current hour."""
+        if updated is None:
+            return None
+        hourly = payload.get("hourly", {})
+        hours = hourly.get("time") or []
+        probabilities = hourly.get("precipitation_probability") or []
+        if not hours or not probabilities:
+            return None
+        target = updated.replace(minute=0, second=0, microsecond=0)
+        for hour, prob in zip(hours, probabilities):
+            try:
+                hour_dt = datetime.fromisoformat(hour).replace(
+                    tzinfo=ZoneInfo(config.timezone)
+                )
+            except ValueError:
+                continue
+            if hour_dt == target:
+                return _to_int(prob)
+        return None
 
     def get_rain_forecast(self) -> RainForecast:
         """Fetch today's hourly rain forecast."""

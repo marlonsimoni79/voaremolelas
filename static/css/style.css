@@ -108,6 +108,8 @@ h2 { margin-top: 0; font-size: 1.1rem; color: var(--accent); }
 
 .criteria .detail { color: var(--muted); margin-left: auto; font-size: 0.9rem; text-align: right; }
 
+.source-note { color: var(--muted); font-size: 0.85rem; margin: 0.75rem 0 0; }
+
 .current-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -126,7 +128,7 @@ h2 { margin-top: 0; font-size: 1.1rem; color: var(--accent); }
 
 .tephigrams {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(560px, 1fr));
   gap: 1rem;
 }
 

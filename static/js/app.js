@@ -2,6 +2,12 @@ const REFRESH_MS = 5 * 60 * 1000;
 let windChart = null;
 let rainChart = null;
 
+const SOURCE_LABELS = {
+  metar: "METAR (Allmetsat)",
+  wunderground: "Wunderground (IPEROP1)",
+  windguru: "Windguru",
+};
+
 function compass(deg) {
   if (deg == null) return "?";
   const dirs = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
@@ -62,6 +68,16 @@ function renderCriteria(criteria) {
     li.append(badge, label, detail);
     ul.appendChild(li);
   }
+}
+
+function renderSource(current) {
+  const el = document.getElementById("source");
+  if (!current || !current.source) {
+    el.textContent = "";
+    return;
+  }
+  const label = SOURCE_LABELS[current.source] || current.source;
+  el.textContent = `Weather source: ${label} · Rain: Open-Meteo`;
 }
 
 function renderCurrent(current, rainNow) {
@@ -235,6 +251,7 @@ async function refresh() {
     renderVerdict(data.assessment);
     renderErrors(data.assessment.errors);
     renderCriteria(data.assessment.criteria);
+    renderSource(data.current);
     renderCurrent(data.current, data.rain_now);
     renderWindChart(data.series);
     renderRainChart(data.rain_forecast);

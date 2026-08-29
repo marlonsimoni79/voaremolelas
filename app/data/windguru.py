@@ -44,6 +44,7 @@ class CurrentConditions:
     relative_humidity_pct: Optional[float]
     mslp_hpa: Optional[float]
     observed_at: Optional[datetime]
+    source: Optional[str] = None
 
 
 @dataclass
@@ -163,6 +164,7 @@ class WindguruClient:
             relative_humidity_pct=_to_float(payload.get("rh")),
             mslp_hpa=_to_float(payload.get("mslp")),
             observed_at=_unix_to_local(payload.get("unixtime")),
+            source="windguru",
         )
 
     def get_series(self, hours: int = 6) -> StationSeries:
