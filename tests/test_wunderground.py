@@ -169,3 +169,22 @@ class TestGetCurrent:
         assert calls["params"]["units"] == "m"
         assert calls["params"]["apiKey"]
         assert calls["headers"]["User-Agent"] == USER_AGENT
+
+    def test_explicit_station_id_overrides_default(self, monkeypatch):
+        calls = {}
+
+        class _Resp:
+            status_code = 200
+
+            def json(self):
+                return _payload([_obs()])
+
+        def fake_get(url, params=None, headers=None, timeout=None):
+            calls["params"] = params
+            return _Resp()
+
+        import app.data.wunderground as mod
+
+        monkeypatch.setattr(mod.requests, "get", fake_get)
+        WundergroundClient(station_id="IALMAR8").get_current()
+        assert calls["params"]["stationId"] == "IALMAR8"

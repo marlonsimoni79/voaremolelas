@@ -37,6 +37,8 @@ class Config:
     wunderground_api_key: str = "53b89abc03d14d7ab89abc03d1dd7ab6"
     wunderground_station_id: str = "IPEROP1"
     wunderground_page: str = "https://www.wunderground.com/dashboard/pws/IPEROP1?cm_ven=localwx_pwsdash"
+    # Selectable PWS stations: (station_id, display label)
+    wunderground_stations: tuple = (("IPEROP1", "IPEROP1"), ("IALMAR8", "IALMAR8"))
 
     # Flying criteria
     wind_min_kmh: float = 15.0

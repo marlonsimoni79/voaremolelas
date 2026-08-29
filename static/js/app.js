@@ -8,6 +8,9 @@ const SOURCE_LABELS = {
   windguru: "Windguru",
 };
 
+const STATION_KEY = "pws-station";
+const stationSelect = document.getElementById("station");
+
 function compass(deg) {
   if (deg == null) return "?";
   const dirs = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
@@ -76,7 +79,10 @@ function renderSource(current) {
     el.textContent = "";
     return;
   }
-  const label = SOURCE_LABELS[current.source] || current.source;
+  const station = stationSelect ? stationSelect.value : "";
+  const label = station
+    ? `Wunderground (${station})`
+    : SOURCE_LABELS[current.source] || current.source;
   el.textContent = `Weather source: ${label} · Rain: Open-Meteo`;
 }
 
@@ -245,7 +251,11 @@ function renderTephigrams(tephigrams) {
 
 async function refresh() {
   try {
-    const resp = await fetch("/api/weather");
+    const station = stationSelect ? stationSelect.value : "";
+    const url = station
+      ? `/api/weather?station=${encodeURIComponent(station)}`
+      : "/api/weather";
+    const resp = await fetch(url);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
     renderVerdict(data.assessment);
@@ -263,6 +273,15 @@ async function refresh() {
     document.getElementById("verdict-text").textContent = "Failed to load data";
     document.getElementById("verdict-updated").textContent = String(err);
   }
+}
+
+if (stationSelect) {
+  const saved = localStorage.getItem(STATION_KEY);
+  if (saved) stationSelect.value = saved;
+  stationSelect.addEventListener("change", () => {
+    localStorage.setItem(STATION_KEY, stationSelect.value);
+    refresh();
+  });
 }
 
 refresh();

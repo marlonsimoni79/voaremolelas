@@ -11,6 +11,15 @@
   <header>
     <h1>Voar em Olelas</h1>
     <p class="subtitle">Paragliding conditions at Almargem, Portugal</p>
+    <label class="station-select">
+      <span class="station-label">PWS station</span>
+      <select id="station">
+        <option value="">Auto (METAR first)</option>
+        {% for station_id, label in stations %}
+        <option value="{{ station_id }}">{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
   </header>
 
   <main>
