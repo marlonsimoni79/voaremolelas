@@ -4,13 +4,15 @@ Criteria (from the spec):
   * wind speed between 15 and 22 km/h
   * wind direction between W (270 deg, exclusive) and NW (337.5 deg, inclusive)
   * no rain (not raining now and low rain probability)
+  * daylight (current local time between sunrise and sunset; night is always BAD)
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, time, timezone
 from typing import Any, Dict, List, Optional
+from zoneinfo import ZoneInfo
 
 from app.config import config
 from app.data.openmeteo import RainNow
@@ -127,11 +129,73 @@ def assess_rain(rain: Optional[RainNow]) -> Criterion:
     return Criterion("rain", label, True, "no rain reported")
 
 
+def _parse_hhmm(value: Optional[str]) -> Optional[time]:
+    """Parse an ``HH:MM`` local time string, returning None when invalid."""
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%H:%M").time()
+    except ValueError:
+        return None
+
+
+def assess_daylight(
+    sunrise: Optional[str],
+    sunset: Optional[str],
+    now_local: Optional[datetime],
+) -> Criterion:
+    """Assess whether it is currently daylight at the target location.
+
+    ``sunrise``/``sunset`` are local ``HH:MM`` strings and ``now_local`` is
+    the reference time in the target timezone.  Missing or unparseable data
+    fails closed so the verdict can never be GOOD without confirmed daylight.
+    """
+    label = "Daylight"
+    if now_local is None:
+        return Criterion("daylight", label, False, "no reference time")
+    sunrise_t = _parse_hhmm(sunrise)
+    sunset_t = _parse_hhmm(sunset)
+    if sunrise_t is None or sunset_t is None:
+        return Criterion(
+            "daylight", label, False, "sunrise/sunset data unavailable"
+        )
+    now_time = now_local.time()
+    if now_time < sunrise_t:
+        return Criterion(
+            "daylight", label, False, f"night (sunrise at {sunrise})"
+        )
+    if now_time >= sunset_t:
+        return Criterion(
+            "daylight", label, False, f"night (sunset at {sunset})"
+        )
+    return Criterion(
+        "daylight", label, True, f"daylight ({sunrise} to {sunset})"
+    )
+
+
+def _utcnow() -> datetime:
+    """Current UTC time; isolated so tests can freeze the clock."""
+    return datetime.now(timezone.utc)
+
+
+def _reference_time(now: Optional[datetime]) -> datetime:
+    """Pick the reference time for the daylight check, in the target timezone.
+
+    Uses the actual current local time so a stale observation can never make
+    night look like day.  An explicit ``now`` (tests / overrides) wins.
+    """
+    tz = ZoneInfo(config.timezone)
+    if now is not None:
+        return now if now.tzinfo else now.replace(tzinfo=tz)
+    return _utcnow().astimezone(tz)
+
+
 def analyze(
     current: Optional[CurrentConditions],
     rain: Optional[RainNow],
     series: Optional[StationSeries] = None,
     errors: Optional[List[str]] = None,
+    now: Optional[datetime] = None,
 ) -> Assessment:
     """Combine current conditions and rain into a GOOD/BAD assessment."""
     criteria = []
@@ -141,6 +205,13 @@ def analyze(
     criteria.append(assess_wind_speed(wind_avg))
     criteria.append(assess_wind_direction(wind_dir))
     criteria.append(assess_rain(rain))
+    criteria.append(
+        assess_daylight(
+            series.sunrise if series else None,
+            series.sunset if series else None,
+            _reference_time(now),
+        )
+    )
 
     verdict = "GOOD" if all(c.ok for c in criteria) else "BAD"
 
@@ -158,6 +229,6 @@ def analyze(
         is_raining=rain.is_raining if rain else False,
         sunrise=series.sunrise if series else None,
         sunset=series.sunset if series else None,
-        assessed_at=datetime.now().astimezone(),
+        assessed_at=_utcnow().astimezone(),
         errors=errors or [],
     )

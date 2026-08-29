@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import pytest
 
 from app.api import routes
+from app.logic import analysis
 from app.data.ipma import Tephigram
 from app.data.openmeteo import RainForecast, RainNow
 from app.data.windguru import CurrentConditions, StationSeries
@@ -112,6 +113,12 @@ class TestWeather:
             rain_now=make_rain(),
             tephigrams=make_tephigrams(),
         )
+        # Freeze the clock at 10:00 UTC = 12:00 Lisbon (daylight) so the
+        # daylight criterion is deterministic regardless of test run time.
+        monkeypatch.setattr(
+            analysis, "_utcnow",
+            lambda: datetime(2026, 8, 23, 10, 0, tzinfo=timezone.utc),
+        )
         resp = client.get("/api/weather")
         assert resp.status_code == 200
         data = resp.get_json()
@@ -168,7 +175,7 @@ class TestWeather:
         data = client.get("/api/weather").get_json()
         assert data["assessment"]["verdict"] == "BAD"
         assert data["current"] is None
-        assert len(data["assessment"]["criteria"]) == 3
+        assert len(data["assessment"]["criteria"]) == 4
 
     def test_current_from_allmetsat(self, client, monkeypatch):
         allmetsat = make_current(wind_avg=24.1, wind_dir=280)

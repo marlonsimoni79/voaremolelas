@@ -6,12 +6,14 @@ import pytest
 from app.logic.analysis import (
     Assessment,
     analyze,
+    assess_daylight,
     assess_rain,
     assess_wind_direction,
     assess_wind_speed,
     direction_to_compass,
 )
 from app.data.openmeteo import RainNow
+from app.data.windguru import StationSeries
 
 
 def make_current(wind_avg=18.0, wind_dir=290.0):
@@ -35,6 +37,10 @@ def make_rain(rain_mm=0.0, prob=10):
         is_raining=rain_mm > 0,
         updated_at=datetime(2026, 8, 23, 10, 0, tzinfo=timezone.utc),
     )
+
+
+def make_series(sunrise="07:01", sunset="20:18"):
+    return StationSeries(points=[], sunrise=sunrise, sunset=sunset)
 
 
 class TestCompass:
@@ -115,9 +121,69 @@ class TestRain:
         assert c.ok is False
 
 
+class TestDaylight:
+    def test_daylight(self):
+        c = assess_daylight("07:01", "20:18", datetime(2026, 8, 23, 12, 0))
+        assert c.ok is True
+
+    def test_night_after_sunset(self):
+        c = assess_daylight("07:01", "20:18", datetime(2026, 8, 23, 21, 0))
+        assert c.ok is False
+        assert "night" in c.detail
+
+    def test_night_before_sunrise(self):
+        c = assess_daylight("07:01", "20:18", datetime(2026, 8, 23, 6, 0))
+        assert c.ok is False
+        assert "night" in c.detail
+
+    def test_sunrise_boundary_is_daylight(self):
+        assert assess_daylight("07:01", "20:18", datetime(2026, 8, 23, 7, 1)).ok is True
+
+    def test_sunset_boundary_is_night(self):
+        assert assess_daylight("07:01", "20:18", datetime(2026, 8, 23, 20, 18)).ok is False
+
+    def test_missing_data_fails_closed(self):
+        assert assess_daylight(None, None, datetime(2026, 8, 23, 12, 0)).ok is False
+        assert assess_daylight("07:01", None, datetime(2026, 8, 23, 12, 0)).ok is False
+        assert assess_daylight(None, "20:18", datetime(2026, 8, 23, 12, 0)).ok is False
+
+    def test_unparseable_fails_closed(self):
+        assert assess_daylight("garbage", "20:18", datetime(2026, 8, 23, 12, 0)).ok is False
+
+    def test_missing_reference_time_fails_closed(self):
+        assert assess_daylight("07:01", "20:18", None).ok is False
+
+    def test_analyze_daylight_is_good(self):
+        # 12:00 Lisbon (WEST) -> daylight
+        a = analyze(
+            make_current(), make_rain(), series=make_series(),
+            now=datetime(2026, 8, 23, 12, 0),
+        )
+        assert a.verdict == "GOOD"
+
+    def test_analyze_night_forces_bad(self):
+        # 06:00 Lisbon -> before sunrise, night
+        a = analyze(
+            make_current(), make_rain(), series=make_series(),
+            now=datetime(2026, 8, 23, 6, 0),
+        )
+        assert a.verdict == "BAD"
+        daylight = [c for c in a.criteria if c.name == "daylight"][0]
+        assert daylight.ok is False
+
+    def test_analyze_missing_series_fails_closed(self):
+        a = analyze(make_current(), make_rain())
+        daylight = [c for c in a.criteria if c.name == "daylight"][0]
+        assert daylight.ok is False
+        assert a.verdict == "BAD"
+
+
 class TestAnalyze:
     def test_good(self):
-        a = analyze(make_current(), make_rain())
+        a = analyze(
+            make_current(), make_rain(), series=make_series(),
+            now=datetime(2026, 8, 23, 12, 0),
+        )
         assert a.verdict == "GOOD"
         assert all(c.ok for c in a.criteria)
 
