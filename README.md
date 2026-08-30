@@ -9,8 +9,9 @@ Flying criteria (per spec):
 
 | Criterion | Threshold |
 |---|---|
-| Wind speed | 15 – 22 km/h |
-| Wind direction | W to NW (270° – 315°) |
+| Wind speed (avg) | 15 – 22 km/h |
+| Wind speed (max) | 15 – 25 km/h (when available) |
+| Wind direction | 271° – 337° |
 | Rain | none (probability < 40%) |
 
 ## Architecture
