@@ -9,6 +9,7 @@ from app.logic.analysis import (
     assess_daylight,
     assess_rain,
     assess_wind_direction,
+    assess_wind_max,
     assess_wind_speed,
     direction_to_compass,
 )
@@ -16,12 +17,12 @@ from app.data.openmeteo import RainNow
 from app.data.windguru import StationSeries
 
 
-def make_current(wind_avg=18.0, wind_dir=290.0):
+def make_current(wind_avg=18.0, wind_dir=290.0, wind_max=20.0):
     from app.data.windguru import CurrentConditions
 
     return CurrentConditions(
         wind_avg_kmh=wind_avg,
-        wind_max_kmh=20.0,
+        wind_max_kmh=wind_max,
         wind_direction_deg=wind_dir,
         temperature_c=20.0,
         relative_humidity_pct=50,
@@ -79,6 +80,26 @@ class TestWindSpeed:
     def test_missing(self):
         c = assess_wind_speed(None)
         assert c.ok is False
+
+
+class TestWindMax:
+    def test_in_range(self):
+        assert assess_wind_max(20.0).ok is True
+
+    def test_below(self):
+        assert assess_wind_max(10.0).ok is False
+
+    def test_above(self):
+        assert assess_wind_max(30.0).ok is False
+
+    def test_boundaries(self):
+        assert assess_wind_max(15.0).ok is True
+        assert assess_wind_max(25.0).ok is True
+
+    def test_missing_is_skipped_not_bad(self):
+        c = assess_wind_max(None)
+        assert c.ok is True
+        assert "skipped" in c.detail
 
 
 class TestWindDirection:
@@ -195,10 +216,37 @@ class TestAnalyze:
         a = analyze(make_current(), make_rain(rain_mm=1.0, prob=90))
         assert a.verdict == "BAD"
 
+    def test_bad_wind_max(self):
+        a = analyze(make_current(wind_max=26.0), make_rain())
+        assert a.verdict == "BAD"
+        wind_max = [c for c in a.criteria if c.name == "wind_max"][0]
+        assert wind_max.ok is False
+
+    def test_wind_max_in_range_is_good(self):
+        a = analyze(
+            make_current(wind_max=24.0), make_rain(), series=make_series(),
+            now=datetime(2026, 8, 23, 12, 0),
+        )
+        assert a.verdict == "GOOD"
+        assert a.wind_max_kmh == 24.0
+
+    def test_wind_max_missing_is_skipped(self):
+        a = analyze(
+            make_current(wind_max=None), make_rain(), series=make_series(),
+            now=datetime(2026, 8, 23, 12, 0),
+        )
+        assert a.verdict == "GOOD"
+        wind_max = [c for c in a.criteria if c.name == "wind_max"][0]
+        assert wind_max.ok is True
+        assert "skipped" in wind_max.detail
+
     def test_no_data_is_bad(self):
         a = analyze(None, None)
         assert a.verdict == "BAD"
-        assert all(not c.ok for c in a.criteria)
+        # wind_max is skipped when unavailable and must not fail on its own
+        wind_max = [c for c in a.criteria if c.name == "wind_max"][0]
+        assert wind_max.ok is True
+        assert all(not c.ok for c in a.criteria if c.name != "wind_max")
 
     def test_errors_carried(self):
         a = analyze(make_current(), make_rain(), errors=["windguru: timeout"])

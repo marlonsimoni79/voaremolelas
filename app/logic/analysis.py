@@ -2,6 +2,7 @@
 
 Criteria (from the spec):
   * wind speed between 15 and 22 km/h
+  * recorded wind max between 15 and 25 km/h (when available)
   * wind direction between W (270 deg, exclusive) and NW (337.5 deg, inclusive)
   * no rain (not raining now and low rain probability)
   * daylight (current local time between sunrise and sunset; night is always BAD)
@@ -49,6 +50,7 @@ class Assessment:
     verdict: str  # "GOOD" or "BAD"
     criteria: List[Criterion] = field(default_factory=list)
     wind_avg_kmh: Optional[float] = None
+    wind_max_kmh: Optional[float] = None
     wind_direction_deg: Optional[float] = None
     wind_compass: Optional[str] = None
     temperature_c: Optional[float] = None
@@ -70,6 +72,7 @@ class Assessment:
                 for c in self.criteria
             ],
             "wind_avg_kmh": self.wind_avg_kmh,
+            "wind_max_kmh": self.wind_max_kmh,
             "wind_direction_deg": self.wind_direction_deg,
             "wind_compass": self.wind_compass,
             "temperature_c": self.temperature_c,
@@ -98,6 +101,20 @@ def assess_wind_speed(wind_avg_kmh: Optional[float]) -> Criterion:
     ok = config.wind_min_kmh <= wind_avg_kmh <= config.wind_max_kmh
     detail = _fmt(wind_avg_kmh, "km/h")
     return Criterion("wind_speed", label, ok, detail)
+
+
+def assess_wind_max(wind_max_kmh: Optional[float]) -> Criterion:
+    """Recorded peak wind must stay within the flying range (15-25 km/h).
+
+    The peak is only assessed when a source provides it; without data the
+    criterion passes so it cannot veto the verdict on its own.
+    """
+    label = "Wind max (15-25 km/h)"
+    if wind_max_kmh is None:
+        return Criterion("wind_max", label, True, "no peak data (skipped)")
+    ok = config.wind_max_min_kmh <= wind_max_kmh <= config.wind_max_max_kmh
+    detail = _fmt(wind_max_kmh, "km/h")
+    return Criterion("wind_max", label, ok, detail)
 
 
 def assess_wind_direction(wind_direction_deg: Optional[float]) -> Criterion:
@@ -200,9 +217,11 @@ def analyze(
     """Combine current conditions and rain into a GOOD/BAD assessment."""
     criteria = []
     wind_avg = current.wind_avg_kmh if current else None
+    wind_max = current.wind_max_kmh if current else None
     wind_dir = current.wind_direction_deg if current else None
 
     criteria.append(assess_wind_speed(wind_avg))
+    criteria.append(assess_wind_max(wind_max))
     criteria.append(assess_wind_direction(wind_dir))
     criteria.append(assess_rain(rain))
     criteria.append(
@@ -219,6 +238,7 @@ def analyze(
         verdict=verdict,
         criteria=criteria,
         wind_avg_kmh=wind_avg,
+        wind_max_kmh=wind_max,
         wind_direction_deg=wind_dir,
         wind_compass=direction_to_compass(wind_dir),
         temperature_c=current.temperature_c if current else None,

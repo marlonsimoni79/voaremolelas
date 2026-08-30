@@ -43,6 +43,8 @@ class Config:
     # Flying criteria
     wind_min_kmh: float = 15.0
     wind_max_kmh: float = 22.0
+    wind_max_min_kmh: float = 15.0
+    wind_max_max_kmh: float = 25.0
     wind_dir_min: float = 270.0  # W (exclusive)
     wind_dir_max: float = 337.5  # NW (inclusive)
     rain_probability_threshold: int = 40  # percent

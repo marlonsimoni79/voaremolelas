@@ -189,7 +189,7 @@ class TestWeather:
         data = client.get("/api/weather").get_json()
         assert data["assessment"]["verdict"] == "BAD"
         assert data["current"] is None
-        assert len(data["assessment"]["criteria"]) == 4
+        assert len(data["assessment"]["criteria"]) == 5
 
     def test_current_from_allmetsat(self, client, monkeypatch):
         allmetsat = make_current(wind_avg=24.1, wind_dir=280)
